@@ -973,6 +973,7 @@ export class AgentRuntimeService {
       };
     } catch (error) {
       log('Step %d failed for operation %s: %O', stepIndex, operationId, error);
+      const formattedError = formatErrorForState(error);
 
       // Build error state — try loading current state from coordinator, but if that
       // also fails (e.g. Redis ECONNRESET), fall back to a minimal error state so
@@ -981,7 +982,8 @@ export class AgentRuntimeService {
       try {
         await this.streamManager.publishStreamEvent(operationId, {
           data: {
-            error: (error as Error).message,
+            error: formattedError.message,
+            errorType: String(formattedError.type),
             phase: 'step_execution',
             stepIndex,
           },
@@ -1000,15 +1002,17 @@ export class AgentRuntimeService {
         const errorState = await this.coordinator.loadAgentState(operationId);
         finalStateWithError = {
           ...errorState!,
-          error: formatErrorForState(error),
+          error: formattedError,
           status: 'error' as const,
+          stepCount: errorState?.stepCount ?? stepIndex,
         };
       } catch (loadError) {
         log('[%s] Failed to load error state (infra may be down): %O', operationId, loadError);
         // Fallback: construct a minimal error state so callbacks still receive useful info
         finalStateWithError = {
-          error: formatErrorForState(error),
+          error: formattedError,
           status: 'error' as const,
+          stepCount: stepIndex,
         };
       }
 
