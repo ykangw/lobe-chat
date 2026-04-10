@@ -1233,6 +1233,22 @@ export const taskRouter = router({
         const model = ctx.taskModel;
         const resolved = await resolveOrThrow(model, id);
 
+        // Cascade: when leaving `running`, cancel all running topics
+        if (resolved.status === 'running' && status !== 'running') {
+          const topics = await ctx.taskTopicModel.findByTaskId(resolved.id);
+          const aiAgentService = new AiAgentService(ctx.serverDB, ctx.userId);
+
+          for (const t of topics) {
+            if (t.status !== 'running') continue;
+            if (t.operationId) {
+              await aiAgentService.interruptTask({ operationId: t.operationId }).catch((err) => {
+                console.error('[task:updateStatus] failed to interrupt topic %s:', t.topicId, err);
+              });
+            }
+            await ctx.taskTopicModel.updateStatus(resolved.id, t.topicId, 'canceled');
+          }
+        }
+
         const extra: Record<string, unknown> = {};
         if (status === 'running') extra.startedAt = new Date();
         if (status === 'completed' || status === 'failed' || status === 'canceled')
