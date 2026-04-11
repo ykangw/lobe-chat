@@ -1240,12 +1240,21 @@ export const taskRouter = router({
 
           for (const t of topics) {
             if (t.status !== 'running') continue;
+
+            // Interrupt the remote operation first; if it fails, skip cancellation
+            // to avoid desynchronizing DB state from a still-running operation.
             if (t.operationId) {
-              await aiAgentService.interruptTask({ operationId: t.operationId }).catch((err) => {
+              try {
+                await aiAgentService.interruptTask({ operationId: t.operationId });
+              } catch (err) {
                 console.error('[task:updateStatus] failed to interrupt topic %s:', t.topicId, err);
-              });
+                continue;
+              }
             }
-            await ctx.taskTopicModel.updateStatus(resolved.id, t.topicId, 'canceled');
+
+            // Conditionally cancel only if the topic is still running,
+            // avoiding overwrite of a concurrent completed/timeout transition.
+            await ctx.taskTopicModel.cancelIfRunning(resolved.id, t.topicId);
           }
         }
 

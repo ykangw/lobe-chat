@@ -397,6 +397,26 @@ describe('Task Router Integration', () => {
       await caller.updateStatus({ id: task.data.id, status: 'paused' });
       expect(mockInterruptTask).not.toHaveBeenCalled();
     });
+
+    it('should skip cancellation when interrupt fails', async () => {
+      const task = await caller.create({
+        assigneeAgentId: testAgentId,
+        instruction: 'Test interrupt failure',
+      });
+
+      await caller.run({ id: task.data.id });
+
+      // Make interruptTask fail
+      mockInterruptTask.mockRejectedValueOnce(new Error('network error'));
+
+      // Transition task from running → paused
+      await caller.updateStatus({ id: task.data.id, status: 'paused' });
+
+      // The topic should still be running because interrupt failed
+      // so re-running should hit CONFLICT
+      await caller.updateStatus({ id: task.data.id, status: 'backlog' });
+      await expect(caller.run({ id: task.data.id })).rejects.toThrow(/already has a running topic/);
+    });
   });
 
   describe('heartbeat timeout detection', () => {
