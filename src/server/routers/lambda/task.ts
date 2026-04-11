@@ -1239,7 +1239,7 @@ export const taskRouter = router({
           const aiAgentService = new AiAgentService(ctx.serverDB, ctx.userId);
 
           for (const t of topics) {
-            if (t.status !== 'running') continue;
+            if (t.status !== 'running' || !t.topicId) continue;
 
             // Interrupt the remote operation first; if it fails, skip cancellation
             // to avoid desynchronizing DB state from a still-running operation.
