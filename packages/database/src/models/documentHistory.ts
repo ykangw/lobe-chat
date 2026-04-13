@@ -1,7 +1,7 @@
 import { and, desc, eq, lt } from 'drizzle-orm';
 
 import type { DocumentHistoryItem, NewDocumentHistory } from '../schemas';
-import { documentHistories } from '../schemas';
+import { documentHistories, documents } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 
 export interface QueryDocumentHistoryParams {
@@ -20,6 +20,16 @@ export class DocumentHistoryModel {
   }
 
   create = async (params: Omit<NewDocumentHistory, 'userId'>): Promise<DocumentHistoryItem> => {
+    const [document] = await this.db
+      .select({ id: documents.id })
+      .from(documents)
+      .where(and(eq(documents.id, params.documentId), eq(documents.userId, this.userId)))
+      .limit(1);
+
+    if (!document) {
+      throw new Error('Document not found');
+    }
+
     const [result] = await this.db
       .insert(documentHistories)
       .values({ ...params, userId: this.userId })
@@ -113,8 +123,8 @@ export class DocumentHistoryModel {
       .from(documentHistories)
       .where(and(...conditions))
       .orderBy(
-        desc(documentHistories.savedAt),
         desc(documentHistories.version),
+        desc(documentHistories.savedAt),
         desc(documentHistories.id),
       )
       .limit(limit);
