@@ -5,7 +5,7 @@ import { documentHistories, documents } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 
 export interface QueryDocumentHistoryParams {
-  beforeVersion?: number;
+  beforeSavedAt?: Date;
   documentId: string;
   limit?: number;
 }
@@ -69,25 +69,6 @@ export class DocumentHistoryModel {
     return result;
   };
 
-  findByDocumentIdAndVersion = async (
-    documentId: string,
-    version: number,
-  ): Promise<DocumentHistoryItem | undefined> => {
-    const [result] = await this.db
-      .select()
-      .from(documentHistories)
-      .where(
-        and(
-          eq(documentHistories.documentId, documentId),
-          eq(documentHistories.version, version),
-          eq(documentHistories.userId, this.userId),
-        ),
-      )
-      .limit(1);
-
-    return result;
-  };
-
   findLatestByDocumentId = async (documentId: string): Promise<DocumentHistoryItem | undefined> => {
     const [result] = await this.db
       .select()
@@ -98,14 +79,14 @@ export class DocumentHistoryModel {
           eq(documentHistories.userId, this.userId),
         ),
       )
-      .orderBy(desc(documentHistories.version))
+      .orderBy(desc(documentHistories.savedAt), desc(documentHistories.id))
       .limit(1);
 
     return result;
   };
 
   list = async ({
-    beforeVersion,
+    beforeSavedAt,
     documentId,
     limit = 50,
   }: QueryDocumentHistoryParams): Promise<DocumentHistoryItem[]> => {
@@ -114,19 +95,15 @@ export class DocumentHistoryModel {
       eq(documentHistories.userId, this.userId),
     ];
 
-    if (beforeVersion !== undefined) {
-      conditions.push(lt(documentHistories.version, beforeVersion));
+    if (beforeSavedAt !== undefined) {
+      conditions.push(lt(documentHistories.savedAt, beforeSavedAt));
     }
 
     return this.db
       .select()
       .from(documentHistories)
       .where(and(...conditions))
-      .orderBy(
-        desc(documentHistories.version),
-        desc(documentHistories.savedAt),
-        desc(documentHistories.id),
-      )
+      .orderBy(desc(documentHistories.savedAt), desc(documentHistories.id))
       .limit(limit);
   };
 
